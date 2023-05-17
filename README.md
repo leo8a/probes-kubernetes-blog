@@ -20,7 +20,7 @@ This probe indicates whether the container is running. If the liveness probe fai
 
 ##### Lifecycle
 
-In order to design a robust recovery strategy using this probe, it is important to deeply understand its entire lifecycle first. The high-level state machine depicted below illustrates the various stages involved.
+In order to design a robust recovery strategy using `livenessProbes`, it is important to deeply understand its entire lifecycle first. The high-level state machine depicted below illustrates the various stages involved.
 
 <p align="center">
   <img src="./assets/lifecycle-livenessprobe.png" alt="LifeCycle of LivenessProbe" style="width:100%"> <br clear="left"/>
@@ -158,7 +158,7 @@ sum(rate(container_cpu_usage_seconds_total{namespace="probes-study",pod~="livene
 </p>
 
 > <u>Important Note:</u>
->   - We strongly recommend NOT TO USE probes with the `exec` mechanism in critical low-latency applications due to the high CPU usage of this type of probe. Whenever possible, try to use alternative check mechanisms (i.e. `httpGet`, `tcpSocket`, or `grpc`).
+>   - We strongly recommend NOT TO USE probes with the `exec` mechanism in resource constrained environments due to the high CPU usage of this type of probe. Whenever possible, try to use alternative check mechanisms (i.e. `httpGet`, `tcpSocket`, or `grpc`).
 
 ### Decide on probe configurations
 
@@ -178,11 +178,15 @@ worstCaseStartupTime > failureThreshold * periodSeconds
 
 ## Recommendations for Telco workloads
 
-When dealing with Telco (or low-latency) workloads in Kubernetes, it is highly recommended NOT to use probes with the `exec` mechanism configured, unless there are no other feasible alternatives such as `tcpSocket`, `grpc`, or `httpGet`.
+When dealing with resource-constrained environments (e.g. Telco or low-latency workloads) in Kubernetes, it is highly recommended NOT to use probes with the `exec` mechanism configured, unless there are no other feasible alternatives such as `tcpSocket`, `grpc`, or `httpGet`.
 
-Mind that you may also omit probes from low-priority services, where the command would need to be relatively expensive to accurately determine healthiness.
+In scenarios with nodes using a real-time kernel, the `exec` probes on a pinned application might be scheduled in the same CPU(s) the pod uses. Particularly, when multiple probes are scheduled to be executed on the same CPU(s) where the `rt` polling thread is running, it may affect the overall cluster's performance, and ultimately provokes the cluster nodes to hang unexpectedly.
+
+Mind that `kubelet` usually requires more effort to perform `exec` probes (i.e. involving diverse hops within code like `kubelet`, `cri-o`, `conmon`, `runc`, and finally the probe) while other types of probes just happen directly inline in the kubelet process.
+
+It is worth highlighting that probes from low-priority services could be also omitted, particularly where the `exec` command would need to be relatively expensive to accurately determine healthiness.
 
 If `exec`-based diagnostics are indeed needed, it is advisable to limit the number of probes to a maximum of 10 per SNO (Single Node OpenShift) cluster and set the `periodSeconds` field to be no less than 10 seconds.
 
 > <u>Note:</u>
->   - **It is important to periodically review your probes**. With updates, optimizations, and potential regressions in your application, your probes' performance and definition of a `healthy` state may change. Therefore, set up a reminder to regularly assess your probes. This practice will ensure that your probes accurately reflect the state of your applications and help you avoid any unexpected downtime.
+>   - **It is important to review your probes periodically**. With updates, optimizations, and potential regressions in your application, your probes' performance and definition of a `healthy` state may change. Therefore, set up a reminder to regularly assess your probes. This practice will ensure that your probes accurately reflect the state of your applications and help you avoid any unexpected downtime.
